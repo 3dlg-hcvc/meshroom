@@ -40,3 +40,8 @@ __pycache__
 
 *.qmlc
 *.jsc
+
+# build
+AliceVision/
+install/
+build/
