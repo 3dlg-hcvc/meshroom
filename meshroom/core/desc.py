@@ -360,7 +360,7 @@ class DynamicNodeSize(object):
         from meshroom.nodes.aliceVision.CameraInit import readSfMData
         # if the input is a camera .sfm file & no linked node
         # return the number of views in the camera file
-        if os.path.isfile(param.value):
+        if isinstance(param.value, str) and os.path.isfile(param.value):
             views, intrinsics = readSfMData(param.value)
             if not param.getLinkParam():
                 return len(views)

@@ -19,7 +19,8 @@ parser.add_argument('-g', '--graph', metavar='GRAPHFILE.mg', type=str,
 parser.add_argument('-sfm', '--cameraSFM', metavar='CAMERAFILE.sfm', type=str,
                     help='Filepath to a camera file.')
 parser.add_argument('--paramOverrides', metavar='NODETYPE:param=value NODEINSTANCE.param=value', type=str, nargs='*',
-                    default=["StructureFromMotion:lockScenePreviouslyReconstructed=true", "StructureFromMotion:lockAllIntrinsics=true"],
+                    default=["StructureFromMotion:lockScenePreviouslyReconstructed=true", "StructureFromMotion:lockAllIntrinsics=true"
+                    "FeatureExtraction:maxThreads=4", "DepthMap:nbGPUs=1"],
                     # default=None,
                     help='Override specific parameters directly from the command line (by node type or by node names).')
 parser.add_argument('--toNode', metavar='NODE_NAME', type=str,
