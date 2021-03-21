@@ -19,8 +19,9 @@ parser.add_argument('-g', '--graph', metavar='GRAPHFILE.mg', type=str,
 parser.add_argument('-sfm', '--cameraSFM', metavar='CAMERAFILE.sfm', type=str,
                     help='Filepath to a camera file.')
 parser.add_argument('--paramOverrides', metavar='NODETYPE:param=value NODEINSTANCE.param=value', type=str, nargs='*',
-                    default=["StructureFromMotion:lockScenePreviouslyReconstructed=true", "StructureFromMotion:lockAllIntrinsics=true"
+                    default=["StructureFromMotion:lockScenePreviouslyReconstructed=true", "StructureFromMotion:lockAllIntrinsics=true",
                     "FeatureExtraction:maxThreads=4", "DepthMap:nbGPUs=1"],
+                    # "FeatureMatching:matchFromKnownCameraPoses=true"],
                     # default=None,
                     help='Override specific parameters directly from the command line (by node type or by node names).')
 parser.add_argument('--toNode', metavar='NODE_NAME', type=str,
@@ -32,6 +33,11 @@ parser.add_argument('--forceCompute', help='Compute in all cases even if already
 parser.add_argument('--cache', metavar='FOLDER', type=str,
                     default="MeshroomCache",
                     help='Override the cache folder')
+parser.add_argument('--save', metavar='FILE', type=str, required=False,
+                    help='Save the configured Meshroom graph to a project file. It will setup the cache folder accordingly if not explicitly changed by --cache.')
+parser.add_argument('-o', '--output', metavar='FOLDER', type=str, required=False,
+                    help='Output folder where results should be copied to. '
+                         'If not set, results will have to be retrieved directly from the cache folder.')
 
 args = parser.parse_args()
 
@@ -85,6 +91,14 @@ if args.paramOverrides:
                 raise ValueError('Invalid param override: ' + str(p))
 
 print("\n")
+
+if args.save:
+    graph.save(args.save, setupProjectFile=not bool(args.cache))
+    print('File successfully saved: "{}"'.format(args.save))
+
+if args.output:
+    publish = getOnlyNodeOfType(graph, 'Publish')
+    publish.output.value = args.output
 
 toNodes = None
 if args.toNode:

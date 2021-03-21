@@ -19,5 +19,3 @@ export MESHROOMPATH=$PWD
 
 # this line launch whatever script and relevant options that are given as input ($@)
 PYTHONPATH=${MESHROOMPATH} PATH=$PATH:${ALICEVISION_INSTALL}/bin python ${MESHROOMPATH}/$@ 
-
-./configure.sh
