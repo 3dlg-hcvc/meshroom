@@ -1,3 +1,4 @@
 #!/bin/bash
 . ./configure.sh
-./meshroom.sh meshroom/ui $@ 
+./meshroom.sh meshroom/ui $@
+

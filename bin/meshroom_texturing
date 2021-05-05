@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+import distutils.util
+
+import meshroom
+meshroom.setupEnvironment()
+
+import meshroom.core.graph
+import meshroom.core.taskManager
+from meshroom import multiview
+from meshroom.core.node import Status
+
+parser = argparse.ArgumentParser(description='Texturing mesh.')
+
+parser.add_argument('-i', '--input', metavar='SFM/FOLDERS/IMAGES', type=str, nargs='*',
+                    default=[],
+                    help='Input folder containing images or folders of images or file (.sfm or .json) '
+                         'with images paths and optionally predefined camera intrinsics.')
+parser.add_argument('-abc', '--denseSFM', metavar='DENSESFM.abc', type=str,
+                    help='Filepath to a dense point cloud alembic file.')
+parser.add_argument('-img', '--images', metavar='FOLDER', type=str,
+                    help='Images folder for texturing.')
+parser.add_argument('-obj', '--mesh', metavar='MESH.obj', type=str,
+                    help='Filepath to a .obj mesh to be textured.')
+parser.add_argument('--paramOverrides', metavar='NODETYPE:param=value NODEINSTANCE.param=value', type=str, nargs='*',
+                    help='Override specific parameters directly from the command line (by node type or by node names).')
+parser.add_argument('--forceStatus', help='Force computation if status is RUNNING or SUBMITTED.',
+                    action='store_true')
+parser.add_argument('--forceCompute', help='Compute in all cases even if already computed.',
+                    action='store_true')
+parser.add_argument('--cache', metavar='FOLDER', type=str,
+                    default="MeshroomCache",
+                    help='Override the cache folder')
+parser.add_argument('--save', metavar='FILE', type=str, required=False,
+                    help='Save the configured Meshroom graph to a project file. It will setup the cache folder accordingly if not explicitly changed by --cache.')
+
+args = parser.parse_args()
+
+def getOnlyNodeOfType(g, nodeType):
+    """ Helper function to get a node of 'nodeType' in the graph 'g' and raise if no or multiple candidates. """
+    nodes = g.nodesOfType(nodeType)
+    if len(nodes) != 1:
+        raise RuntimeError("meshroom_batch requires a pipeline graph with exactly one '{}' node, {} found."
+                           .format(nodeType, len(nodes)))
+    return nodes[0]
+
+if args.input:
+     graph = meshroom.core.graph.Graph("")
+     graph.addNewNode("CameraInit")
+     graph.update()
+
+     views, intrinsics = [], []
+     # Build image files list from inputImages arguments
+     filesByType = multiview.FilesByType()
+
+     hasSearchedForImages = False
+
+     if len(args.input) == 1 and os.path.isfile(args.input[0]) and os.path.splitext(args.input[0])[-1] in ('.json', '.sfm'):
+          # args.input is a sfmData file: setup pre-calibrated views and intrinsics
+          from meshroom.nodes.aliceVision.CameraInit import readSfMData
+          views, intrinsics = readSfMData(args.input[0])
+     else:
+          filesByType.extend(multiview.findFilesByTypeInFolder(args.input, recursive=False))
+          hasSearchedForImages = True
+
+          if hasSearchedForImages and not filesByType.images:
+               print("No image found")
+               exit(-1)
+
+          cameraInit = getOnlyNodeOfType(graph, 'CameraInit')
+          # reset graph inputs
+          cameraInit.viewpoints.resetValue()
+          cameraInit.intrinsics.resetValue()
+          # add views and intrinsics (if any) read from args.input
+          cameraInit.viewpoints.extend(views)
+          cameraInit.intrinsics.extend(intrinsics)
+
+          if filesByType.images:
+               views, intrinsics = cameraInit.nodeDesc.buildIntrinsics(cameraInit, filesByType.images)
+               cameraInit.viewpoints.value = views
+               cameraInit.intrinsics.value = intrinsics
+               graph.update()
+elif args.denseSFM and args.images and args.mesh:
+     graph = meshroom.core.graph.Graph("")
+     graph.addNewNode("Texturing")
+     graph.update()
+
+     texturing = getOnlyNodeOfType(graph, 'Texturing')
+     texturing.attribute('input').value = args.denseSFM
+     texturing.attribute('imagesFolder').value = args.images
+     texturing.attribute('inputMesh').value = args.mesh
+
+     graph.update()
+else:
+     print("No valid inputs")
+     exit(-1)
+
+graph.cacheDir = args.cache if args.cache else meshroom.core.defaultCacheFolder
+
+if args.save:
+     graph.save(args.save, setupProjectFile=not bool(args.cache))
+     print('File successfully saved: "{}"'.format(args.save))
+
+taskManager = meshroom.core.taskManager.TaskManager()
+taskManager.compute(graph, toNodes=None, forceCompute=args.forceCompute, forceStatus=args.forceStatus)
+
+
