@@ -38,6 +38,7 @@ parser.add_argument('--save', metavar='FILE', type=str, required=False,
 
 args = parser.parse_args()
 
+
 def getOnlyNodeOfType(g, nodeType):
     """ Helper function to get a node of 'nodeType' in the graph 'g' and raise if no or multiple candidates. """
     nodes = g.nodesOfType(nodeType)
@@ -46,64 +47,94 @@ def getOnlyNodeOfType(g, nodeType):
                            .format(nodeType, len(nodes)))
     return nodes[0]
 
+
 if args.input:
-     graph = meshroom.core.graph.Graph("")
-     graph.addNewNode("CameraInit")
-     graph.update()
+    graph = meshroom.core.graph.Graph("")
+    graph.addNewNode("CameraInit")
+    graph.update()
 
-     views, intrinsics = [], []
-     # Build image files list from inputImages arguments
-     filesByType = multiview.FilesByType()
+    views, intrinsics = [], []
+    # Build image files list from inputImages arguments
+    filesByType = multiview.FilesByType()
 
-     hasSearchedForImages = False
+    hasSearchedForImages = False
 
-     if len(args.input) == 1 and os.path.isfile(args.input[0]) and os.path.splitext(args.input[0])[-1] in ('.json', '.sfm'):
-          # args.input is a sfmData file: setup pre-calibrated views and intrinsics
-          from meshroom.nodes.aliceVision.CameraInit import readSfMData
-          views, intrinsics = readSfMData(args.input[0])
-     else:
-          filesByType.extend(multiview.findFilesByTypeInFolder(args.input, recursive=False))
-          hasSearchedForImages = True
+    if len(args.input) == 1 and os.path.isfile(args.input[0]) and os.path.splitext(args.input[0])[-1] in ('.json', '.sfm'):
+        # args.input is a sfmData file: setup pre-calibrated views and intrinsics
+        from meshroom.nodes.aliceVision.CameraInit import readSfMData
+        views, intrinsics = readSfMData(args.input[0])
+    else:
+        filesByType.extend(multiview.findFilesByTypeInFolder(
+            args.input, recursive=False))
+        hasSearchedForImages = True
 
-          if hasSearchedForImages and not filesByType.images:
-               print("No image found")
-               exit(-1)
+        if hasSearchedForImages and not filesByType.images:
+            print("No image found")
+            exit(-1)
 
-          cameraInit = getOnlyNodeOfType(graph, 'CameraInit')
-          # reset graph inputs
-          cameraInit.viewpoints.resetValue()
-          cameraInit.intrinsics.resetValue()
-          # add views and intrinsics (if any) read from args.input
-          cameraInit.viewpoints.extend(views)
-          cameraInit.intrinsics.extend(intrinsics)
+        cameraInit = getOnlyNodeOfType(graph, 'CameraInit')
+        # reset graph inputs
+        cameraInit.viewpoints.resetValue()
+        cameraInit.intrinsics.resetValue()
+        # add views and intrinsics (if any) read from args.input
+        cameraInit.viewpoints.extend(views)
+        cameraInit.intrinsics.extend(intrinsics)
 
-          if filesByType.images:
-               views, intrinsics = cameraInit.nodeDesc.buildIntrinsics(cameraInit, filesByType.images)
-               cameraInit.viewpoints.value = views
-               cameraInit.intrinsics.value = intrinsics
-               graph.update()
+        if filesByType.images:
+            views, intrinsics = cameraInit.nodeDesc.buildIntrinsics(
+                cameraInit, filesByType.images)
+            cameraInit.viewpoints.value = views
+            cameraInit.intrinsics.value = intrinsics
+            graph.update()
 elif args.denseSFM and args.images and args.mesh:
-     graph = meshroom.core.graph.Graph("")
-     graph.addNewNode("Texturing")
-     graph.update()
+    graph = meshroom.core.graph.Graph("")
+    graph.addNewNode("Texturing")
+    graph.update()
 
-     texturing = getOnlyNodeOfType(graph, 'Texturing')
-     texturing.attribute('input').value = args.denseSFM
-     texturing.attribute('imagesFolder').value = args.images
-     texturing.attribute('inputMesh').value = args.mesh
+    if args.paramOverrides:
+        import re
+        reExtract = re.compile('(\w+)([:.])(\w+)=(.*)')
+        for p in args.paramOverrides:
+            result = reExtract.match(p)
+            if not result:
+                raise ValueError('Invalid param override: ' + str(p))
+            node, t, param, value = result.groups()
+            if t == ':':
+                nodesOfType = graph.nodesOfType(node)
+                if not nodesOfType:
+                    raise ValueError(
+                        'No node with the type "{}" in the scene.'.format(node))
+                for n in nodesOfType:
+                    if value.lower() in ['true', 'false']:
+                        value = value.lower() in ['true']
+                    print('Overrides {node}.{param}={value}'.format(
+                        node=node, param=param, value=value))
+                    n.attribute(param).value = value
+            elif t == '.':
+                print('Overrides {node}.{param}={value}'.format(
+                    node=node, param=param, value=value))
+                graph.findNode(node).attribute(param).value = value
+            else:
+                raise ValueError('Invalid param override: ' + str(p))
 
-     graph.update()
+    print("\n")
+
+    texturing = getOnlyNodeOfType(graph, 'Texturing')
+    texturing.attribute('input').value = args.denseSFM
+    texturing.attribute('imagesFolder').value = args.images
+    texturing.attribute('inputMesh').value = args.mesh
+
+    graph.update()
 else:
-     print("No valid inputs")
-     exit(-1)
+    print("No valid inputs")
+    exit(-1)
 
 graph.cacheDir = args.cache if args.cache else meshroom.core.defaultCacheFolder
 
 if args.save:
-     graph.save(args.save, setupProjectFile=not bool(args.cache))
-     print('File successfully saved: "{}"'.format(args.save))
+    graph.save(args.save, setupProjectFile=not bool(args.cache))
+    print('File successfully saved: "{}"'.format(args.save))
 
 taskManager = meshroom.core.taskManager.TaskManager()
-taskManager.compute(graph, toNodes=None, forceCompute=args.forceCompute, forceStatus=args.forceStatus)
-
-
+taskManager.compute(graph, toNodes=None,
+                    forceCompute=args.forceCompute, forceStatus=args.forceStatus)
