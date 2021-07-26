@@ -179,6 +179,7 @@ class TaskManager(BaseObject):
             nodes, edges = graph.dfsOnFinish(startNodes=toNodes)
             self.checkCompatibilityNodes(graph, nodes, "COMPUTATION")  # name of the context is important for QML
             self.checkDuplicates(nodes, "COMPUTATION")  # name of the context is important for QML
+            allReady = True
         else:
             # Check dependencies of toNodes
             if not toNodes:
