@@ -49,3 +49,5 @@ QtAliceVision/
 QtOIIO/
 qmlAlembic/
 tmp/
+
+meshroom*.sh
